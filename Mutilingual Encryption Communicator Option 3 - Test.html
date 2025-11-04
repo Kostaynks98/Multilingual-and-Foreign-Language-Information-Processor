@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Morse, Binary & Anonymous Communicator (Multilingual)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --txt:#e5e7eb; --accent:#38bdf8; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:linear-gradient(180deg,#0b1220,#0f172a);} .wrap{max-width:1280px;margin:0 auto;padding:24px;display:flex;gap:24px;}
+    .main-content{flex:1} .sidebar{width:100%;max-width:400px;}
+    h1{color:var(--txt);font-weight:700;margin:.2rem 0 1rem} p,h2,label{color:var(--muted)}
+    .card{background:var(--panel);border:1px solid #1f2937;border-radius:20px;padding:20px;margin-top:14px}
+    textarea,input[type=text],input[type=email],select{width:100%;padding:12px;border-radius:14px;border:1px solid #374151;background:#0b1220;color:var(--txt);resize:vertical}
+    .row{display:grid;grid-template-columns:1fr;gap:14px} @media(min-width:900px){.row{grid-template-columns:1fr 1fr}}
+    button,select,input[type=number],input[type=file]{background:#0b1220;color:var(--txt);border:1px solid #334155;border-radius:12px;padding:10px 12px;transition:transform 0.2s,border-color 0.2s,box-shadow 0.2s}
+    button:hover{border-color:var(--accent);transform:scale(1.05);box-shadow:0 0 8px var(--accent)}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#0b1220;border:1px solid #374151;border-radius:8px;padding:2px 6px;color:var(--muted)}
+    .small{font-size:.9rem}
+    .led{display:inline-block;width:12px;height:12px;border-radius:50%;background:#334155;margin-left:8px;transition:background 0.1s}
+    .led.active{background:#38bdf8;box-shadow:0 0 8px #38bdf8}
+    #map{height:300px;border-radius:14px;border:1px solid #374151;}
+    #statusArea, #contactStatus, #anonContactStatus{min-height:60px;color:var(--txt)}
+    @media(max-width:900px){.wrap{flex-direction:column}.sidebar{max-width:100%}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="main-content">
+      <h1>Morse, Binary & Anonymous Communicator (Multilingual)</h1>
+      <p class="small">Convert text in any language, play Morse audio, send anonymous emails/SMS via CSV, or contact someone directly/anonymously. Explore language regions on the map.</p>
+
+      <div class="card">
+        <h2>Text Converter</h2>
+        <div class="toolbar" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <label for="language">Language</label>
+            <select id="language" aria-label="Input language">
+              <option value="en">English</option>
+              <option value="ar">Arabic</option>
+              <option value="zh">Chinese</option>
+              <option value="hi">Hindi</option>
+              <option value="ja">Japanese</option>
+              <option value="ru">Russian</option>
+              <option value="el">Greek</option>
+              <option value="fa">Persian</option>
+              <option value="he">Hebrew</option>
+              <option value="th">Thai</option>
+            </select>
+            <label for="mode">Mode</label>
+            <select id="mode" aria-label="Conversion mode">
+              <option value="EN_TO_MORSE">Text → Morse</option>
+              <option value="MORSE_TO_EN">Morse → Text</option>
+              <option value="EN_TO_BIN">Text → Binary</option>
+              <option value="BIN_TO_EN">Binary → Text</option>
+            </select>
+            <span id="binWrap" style="display:none;gap:8px;align-items:center">
+              <label for="binEnc">Encoding</label>
+              <select id="binEnc" aria-label="Binary encoding">
+                <option>8-bit</option>
+                <option>UTF-8</option>
+              </select>
+            </span>
+          </div>
+
+          <div id="audioWrap" style="display:flex;gap:8px;align-items:center">
+            <label for="wpm">WPM</label>
+            <input id="wpm" type="number" min="5" max="40" step="1" value="20" style="width:80px" />
+            <label for="hz">Hz</label>
+            <input id="hz" type="number" min="200" max="1200" step="10" value="600" style="width:90px" />
+            <span class="led" id="led"></span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="input">Input</label>
+            <textarea id="input" placeholder="Type your message (e.g., Hello, مرحبا, 你好)…" lang="en"></textarea>
+            <div class="toolbar" style="margin-top:8px">
+              <button id="reset">Reset</button>
+              <button id="play">Play Morse</button>
+            </div>
+          </div>
+          <div>
+            <label for="output">Output</label>
+            <textarea id="output" readonly placeholder="Output will appear here…"></textarea>
+            <div class="toolbar" style="margin-top:8px">
+              <button id="copy">Copy</button>
+              <button id="download">Download .txt</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Anonymous Communications (CSV)</h2>
+        <p class="small">Upload a CSV with columns: Recipient (email or +phone), Type (email/sms), Subject (for email), Message (any language).</p>
+        <div class="toolbar" style="margin-bottom:10px">
+          <input type="file" id="csvInput" accept=".csv" />
+          <button id="sendMessages">Send Messages</button>
+        </div>
+        <div id="statusArea"></div>
+      </div>
+
+      <div class="card">
+        <h2>Contact Someone</h2>
+        <p class="small">Send a message directly (includes your details) or anonymously.</p>
+        <div class="row">
+          <div>
+            <h3>Direct Contact</h3>
+            <label for="contactName">Your Name</label>
+            <input type="text" id="contactName" placeholder="Your name…" />
+            <label for="contactFrom">Your Email or Phone</label>
+            <input type="text" id="contactFrom" placeholder="Your email or +phone…" />
+            <label for="contactType">Type</label>
+            <select id="contactType">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </select>
+            <label for="contactSubject">Subject (for email)</label>
+            <input type="text" id="contactSubject" placeholder="Subject…" />
+            <label for="contactMessage">Message</label>
+            <textarea id="contactMessage" placeholder="Your message…"></textarea>
+            <div class="toolbar" style="margin-top:8px">
+              <button id="sendContact">Send</button>
+            </div>
+            <div id="contactStatus"></div>
+          </div>
+          <div>
+            <h3>Anonymous Contact</h3>
+            <label for="anonRecipient">Recipient (email or +phone)</label>
+            <input type="text" id="anonRecipient" placeholder="Recipient email or +phone…" />
+            <label for="anonType">Type</label>
+            <select id="anonType">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </select>
+            <label for="anonSubject">Subject (for email)</label>
+            <input type="text" id="anonSubject" placeholder="Subject…" />
+            <label for="anonMessage">Message</label>
+            <textarea id="anonMessage" placeholder="Your message…"></textarea>
+            <div class="toolbar" style="margin-top:8px">
+              <button id="sendAnonContact">Send Anonymously</button>
+            </div>
+            <div id="anonContactStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="card">
+        <h2>Language Map</h2>
+        <p class="small">Select a language to view its primary region.</p>
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>Tips & Conventions</h2>
+      <ul class="small">
+        <li>Morse: Letters separated by space; words by <span class="kbd">/</span>. Non-ASCII chars use U+codepoint (e.g., أ → U+0623).</li>
+        <li>Binary: Space-separated bytes, e.g., <span class="kbd">01000001</span> for “A”. UTF-8 preserves all chars.</li>
+        <li>CSV: Use format <span class="kbd">Recipient,Type,Subject,Message</span>. Phone numbers need country code (e.g., +44).</li>
+        <li>Contact: Direct includes your details; anonymous hides them. Use any language.</li>
+        <li>Map: Select a language to pan to its region.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Morse map (ITU) for ASCII
+    const MORSE_MAP = {
+      A: ".-", B: "-...", C: "-.-.", D: "-..", E: ".", F: "..-.", G: "--.", H: "....", I: "..",
+      J: ".---", K: "-.-", L: ".-..", M: "--", N: "-.", O: "---", P: ".--.", Q: "--.-", R: ".-.",
+      S: "...", T: "-", U: "..-", V: "...-", W: ".--", X: "-..-", Y: "-.--", Z: "--..",
+      0: "-----", 1: ".----", 2: "..---", 3: "...--", 4: "....-", 5: ".....",
+      6: "-....", 7: "--...", 8: "---..", 9: "----.",
+      ".": ".-.-.-", ",": "--..--", "?": "..--..", "!": "-.-.--", ":": "---...", ";": "-.-.-.",
+      "-": "-....-", "_": "..--.-", "\"": ".-..-.", "'": ".----.", "/": "-..-.", "(": "-.--.",
+      ")": "-.--.-", "&": ".-...", "=": "-...-", "+": ".-.-.", "@": ".--.-.",
+      "£": ".-..-..-."
+    };
+    const INVERSE_MORSE_MAP = Object.fromEntries(Object.entries(MORSE_MAP).map(([k,v]) => [v,k]));
+
+    function textToMorse(str, letterSep=" ", wordSep=" / ") {
+      return str.split(/\s+/)
+        .map(word => word.split("")
+          .map(char => {
+            const upperChar = char.toUpperCase();
+            if (MORSE_MAP[upperChar]) return MORSE_MAP[upperChar];
+            const codepoint = char.codePointAt(0).toString(16).toUpperCase().padStart(4, "0");
+            return `U+${codepoint}`;
+          })
+          .join(letterSep))
+        .join(wordSep)
+        .trim();
+    }
+
+    function morseToText(str) {
+      return str.split(/\s*\/\s*|\s{3}/)
+        .map(word => word.trim().split(/\s+/)
+          .map(code => {
+            if (INVERSE_MORSE_MAP[code]) return INVERSE_MORSE_MAP[code];
+            if (code.startsWith("U+")) return String.fromCodePoint(parseInt(code.slice(2), 16));
+            return "?";
+          })
+          .join(""))
+        .join(" ");
+    }
+
+    function textToBinary(str, encoding) {
+      if (encoding === "8-bit") str = str.normalize("NFKD").replace(/[^\x00-\x7F]/g, "?");
+      return str.split("")
+        .map(char => char.charCodeAt(0).toString(2).padStart(8, "0"))
+        .join(" ");
+    }
+
+    function binaryToText(str, encoding) {
+      const bytes = str.trim().split(/\s+/);
+      return bytes.map(bin => {
+        const charCode = parseInt(bin, 2);
+        return isNaN(charCode) ? "?" : String.fromCharCode(charCode);
+      }).join("");
+    }
+
+    // Audio context for Morse playback
+    let audioCtx = null;
+    let isPlaying = false;
+    const led = document.getElementById("led");
+
+    async function playMorse(morse, wpm, hz) {
+      if (isPlaying) return;
+      isPlaying = true;
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const dotLength = 1200 / wpm;
+      const dashLength = dotLength * 3;
+      const gapLength = dotLength;
+
+      for (let char of morse) {
+        if (!isPlaying) break;
+        if (char === ".") {
+          led.classList.add("active");
+          await playTone(hz, dotLength);
+          led.classList.remove("active");
+          await new Promise(r => setTimeout(r, gapLength));
+        } else if (char === "-") {
+          led.classList.add("active");
+          await playTone(hz, dashLength);
+          led.classList.remove("active");
+          await new Promise(r => setTimeout(r, gapLength));
+        } else if (char === " ") {
+          await new Promise(r => setTimeout(r, gapLength * 2));
+        } else if (char === "/") {
+          await new Promise(r => setTimeout(r, gapLength * 6));
+        }
+      }
+      isPlaying = false;
+    }
+
+    async function playTone(hz, duration) {
+      const oscillator = audioCtx.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(hz, audioCtx.currentTime);
+      oscillator.connect(audioCtx.destination);
+      oscillator.start();
+      await new Promise(r => setTimeout(r, duration));
+      oscillator.stop();
+    }
+
+    // Language map coordinates (approximate primary regions)
+    const languageRegions = {
+      en: { coords: [51.5074, -0.1278], label: "English (UK)" }, // London
+      ar: { coords: [24.7136, 46.6753], label: "Arabic (Saudi Arabia)" }, // Riyadh
+      zh: { coords: [39.9042, 116.4074], label: "Chinese (China)" }, // Beijing
+      hi: { coords: [28.6139, 77.2090], label: "Hindi (India)" }, // Delhi
+      ja: { coords: [35.6762, 139.6503], label: "Japanese (Japan)" }, // Tokyo
+      ru: { coords: [55.7558, 37.6173], label: "Russian (Russia)" }, // Moscow
+      el: { coords: [37.9838, 23.7275], label: "Greek (Greece)" }, // Athens
+      fa: { coords: [35.6892, 51.3890], label: "Persian (Iran)" }, // Tehran
+      he: { coords: [31.7683, 35.2137], label: "Hebrew (Israel)" }, // Jerusalem
+      th: { coords: [13.7563, 100.5018], label: "Thai (Thailand)" } // Bangkok
+    };
+
+    // Initialize Leaflet map
+    const map = L.map('map').setView([20, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    let currentMarker = null;
+
+    // DOM elements
+    const languageSelect = document.getElementById("language");
+    const modeSelect = document.getElementById("mode");
+    const binWrap = document.getElementById("binWrap");
+    const binEnc = document.getElementById("binEnc");
+    const input = document.getElementById("input");
+    const output = document.getElementById("output");
+    const wpm = document.getElementById("wpm");
+    const hz = document.getElementById("hz");
+    const resetBtn = document.getElementById("reset");
+    const playBtn = document.getElementById("play");
+    const copyBtn = document.getElementById("copy");
+    const downloadBtn = document.getElementById("download");
+    const csvInput = document.getElementById("csvInput");
+    const sendMessagesBtn = document.getElementById("sendMessages");
+    const statusArea = document.getElementById("statusArea");
+    const contactName = document.getElementById("contactName");
+    const contactFrom = document.getElementById("contactFrom");
+    const contactType = document.getElementById("contactType");
+    const contactSubject = document.getElementById("contactSubject");
+    const contactMessage = document.getElementById("contactMessage");
+    const sendContact = document.getElementById("sendContact");
+    const contactStatus = document.getElementById("contactStatus");
+    const anonRecipient = document.getElementById("anonRecipient");
+    const anonType = document.getElementById("anonType");
+    const anonSubject = document.getElementById("anonSubject");
+    const anonMessage = document.getElementById("anonMessage");
+    const sendAnonContact = document.getElementById("sendAnonContact");
+    const anonContactStatus = document.getElementById("anonContactStatus");
+
+    // Language selection updates map and input
+    languageSelect.addEventListener("change", () => {
+      const lang = languageSelect.value;
+      input.setAttribute("lang", lang);
+      input.placeholder = {
+        en: "Type your message (e.g., Hello)…",
+        ar: "اكتب رسالتك (مثال: مرحبا)…",
+        zh: "输入您的消息（例如：你好）…",
+        hi: "अपना संदेश टाइप करें (उदाहरण: नमस्ते)…",
+        ja: "メッセージを入力してください（例：こんにちは）…",
+        ru: "Введите ваше сообщение (например: Здравствуйте)…",
+        el: "Πληκτρολογήστε το μήνυμά σας (π.χ. Γεια σας)…",
+        fa: "پیام خود را تایپ کنید (مثال: سلام)…",
+        he: "הקלד את ההודעה שלך (למשל: שלום)…",
+        th: "พิมพ์ข้อความของคุณ (เช่น สวัสดี)…"
+      }[lang];
+      const { coords, label } = languageRegions[lang];
+      map.setView(coords, 5);
+      if (currentMarker) map.removeLayer(currentMarker);
+      currentMarker = L.marker(coords).addTo(map).bindPopup(label).openPopup();
+    });
+
+    // Trigger initial language selection
+    languageSelect.dispatchEvent(new Event("change"));
+
+    // Converter logic
+    modeSelect.addEventListener("change", () => {
+      binWrap.style.display = modeSelect.value.includes("BIN") ? "flex" : "none";
+      convert();
+    });
+
+    input.addEventListener("input", convert);
+
+    function convert() {
+      const mode = modeSelect.value;
+      const text = input.value;
+      let result = "";
+
+      if (mode === "EN_TO_MORSE") {
+        result = textToMorse(text);
+      } else if (mode === "MORSE_TO_EN") {
+        result = morseToText(text);
+      } else if (mode === "EN_TO_BIN") {
+        result = textToBinary(text, binEnc.value);
+      } else if (mode === "BIN_TO_EN") {
+        result = binaryToText(text, binEnc.value);
+      }
+
+      output.value = result;
+    }
+
+    resetBtn.addEventListener("click", () => {
+      input.value = "";
+      output.value = "";
+      isPlaying = false;
+    });
+
+    playBtn.addEventListener("click", () => {
+      if (modeSelect.value === "EN_TO_MORSE" || modeSelect.value === "MORSE_TO_EN") {
+        const morse = modeSelect.value === "EN_TO_MORSE" ? textToMorse(input.value) : input.value;
+        playMorse(morse, parseInt(wpm.value), parseInt(hz.value));
+      }
+    });
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(output.value);
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      const blob = new Blob([output.value], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "output.txt";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Anonymous messaging (CSV and forms)
+    const TWILIO_ACCOUNT_SID = 'YOUR_TWILIO_SID';
+    const TWILIO_AUTH_TOKEN = 'YOUR_TWILIO_TOKEN';
+    const TWILIO_NUMBER = 'YOUR_TWILIO_NUMBER';
+
+    async function sendMessage(recipient, type, subject, message, statusElement, anonymous = true) {
+      try {
+        if (type.toLowerCase() === "email") {
+          await fetch('/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: recipient,
+              subject: subject || "Anonymous Message",
+              body: message,
+              from: anonymous ? "anonymous@noreply.com" : contactFrom.value
+            })
+          });
+          statusElement.textContent = `Email sent to ${recipient}`;
+        } else if (type.toLowerCase() === "sms") {
+          await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              Authorization: 'Basic ' + btoa(TWILIO_ACCOUNT_SID + ':' + TWILIO_AUTH_TOKEN)
+            },
+            body: new URLSearchParams({
+              To: recipient,
+              From: TWILIO_NUMBER,
+              Body: message
+            })
+          });
+          statusElement.textContent = `SMS sent to ${recipient}`;
+        }
+      } catch (e) {
+        statusElement.textContent = `Failed to send ${type} to ${recipient}: ${e.message}`;
+      }
+    }
+
+    csvInput.addEventListener("change", () => {
+      const file = csvInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async e => {
+        const text = e.target.result;
+        const rows = text.split("\n").map(row => row.split(",").map(cell => cell.trim()));
+        if (rows[0][0] !== "Recipient" || rows[0][1] !== "Type" || rows[0][2] !== "Subject" || rows[0][3] !== "Message") {
+          statusArea.textContent = "Error: CSV must have headers: Recipient,Type,Subject,Message";
+          return;
+        }
+        statusArea.textContent = "Processing...";
+        for (let i = 1; i < rows.length; i++) {
+          const [recipient, type, subject, message] = rows[i];
+          if (!recipient || !type || !message) continue;
+          await sendMessage(recipient, type, subject, message, statusArea);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    sendMessagesBtn.addEventListener("click", () => {
+      if (csvInput.files.length) csvInput.dispatchEvent(new Event("change"));
+      else statusArea.textContent = "Please select a CSV file.";
+    });
+
+    sendContact.addEventListener("click", () => {
+      if (!contactName.value || !contactFrom.value || !contactMessage.value) {
+        contactStatus.textContent = "Please fill all required fields.";
+        return;
+      }
+      sendMessage(contactFrom.value, contactType.value, contactSubject.value, contactMessage.value, contactStatus, false);
+    });
+
+    sendAnonContact.addEventListener("click", () => {
+      if (!anonRecipient.value || !anonMessage.value) {
+        anonContactStatus.textContent = "Please fill recipient and message.";
+        return;
+      }
+      sendMessage(anonRecipient.value, anonType.value, anonSubject.value, anonMessage.value, anonContactStatus);
+    });
+  </script>
+</body>
+</html>
